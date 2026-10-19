@@ -2331,6 +2331,22 @@ function buildDrum(b, cy, cz, r, dx) {
       drumPanel(b, x, cy, cz, r * 1.004, a, 0.185, 0.042, 0.028, cc(k === 1 ? 'armorL' : 'armor'));
     }
   }
+  // large flat armour panels between the ribs
+  for (const a of [0.79, 2.36, 3.93, 5.50]) {
+    for (const x of [xf - 0.62, xf - 1.26]) {
+      const rad = [0, Math.cos(a), Math.sin(a)];
+      const tang = [0, -Math.sin(a), Math.cos(a)];
+      const p0 = [x, cy + r * 1.008 * Math.cos(a), cz + r * 1.008 * Math.sin(a)];
+      raisedOnFrame(b, p0, [1, 0, 0], tang, rad, 0.155, 0.155, 0.028, cc('armorL'), 0.018);
+      // recessed inner detail + bolts
+      const p1 = V.add(p0, V.mul(rad, 0.029));
+      raisedOnFrame(b, p1, [1, 0, 0], tang, rad, 0.10, 0.10, 0.008, cc('armorD'), 0.006);
+      for (const su of [-1, 1]) for (const sv of [-1, 1]) {
+        const q = V.add(V.add(V.add(p0, V.mul([1, 0, 0], su * 0.19)), V.mul(tang, sv * 0.19)), V.mul(rad, 0.005));
+        boltAt(b, q, rad, 0.014, 0.01);
+      }
+    }
+  }
   // transverse recessed seams
   for (const x of [xf - 0.45, xf - 0.93, xf - 1.41, xf - 1.83]) {
     for (let j = 0; j < 24; j++) {
@@ -2370,9 +2386,9 @@ function buildEngines(b) {
   // compact dorsal & ventral fairing over the top/bottom drums
   for (const sgn of [1, -1]) {
     const y = sgn * 1.40;
-    obox(b, [0.50, y, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1], 0.68, 0.06, 0.43, cc('armor'));
-    obox(b, [0.50, y + sgn * 0.06, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1], 0.54, 0.028, 0.31, cc('armorL'));
-    obox(b, [0.28, y + sgn * 0.08, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1], 0.18, 0.014, 0.20, cc('recess'));
+    obox(b, [0.42, y, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1], 0.82, 0.065, 0.50, cc('armor'));
+    obox(b, [0.42, y + sgn * 0.065, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1], 0.66, 0.03, 0.36, cc('armorL'));
+    obox(b, [0.16, y + sgn * 0.09, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1], 0.22, 0.016, 0.24, cc('recess'));
     for (let i = 0; i < 3; i++) {
       const x = 0.86 - i * 0.22;
       obox(b, [x, y + sgn * 0.055, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1], 0.06, 0.016, 0.12, cc('dark'));
