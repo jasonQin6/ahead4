@@ -2169,21 +2169,29 @@ function buildWaist(b) {
       const ring = rings[idx], cen = ring.reduce((a, p) => V.add(a, p), [0, 0, 0]).map(v => v / ring.length);
       for (let j = 0; j < PROF.length; j++) b.tri(cen, ring[j], ring[(j + 1) % PROF.length], cc('recess'), nn, nn, nn);
     }
-    // recessed panels
-    const T2 = d => d * Math.PI / 180;
-    for (let j = 0; j < 8; j++) {
-      const th = j / 8 * TAU + 0.2;
+    // large framed recessed panels (4 per segment)
+    for (let j = 0; j < 4; j++) {
+      const th = j / 4 * TAU + Math.PI / 4;
       const cx = (x0 + x1) / 2;
-      const p = [cx, Math.cos(th) * stAt(cx).ry * r / 0.92 * 0.99, Math.sin(th) * stAt(cx).rz * r / 0.92 * 0.99];
-      const nn = V.norm([0, Math.cos(th) / stAt(cx).ry, Math.sin(th) / stAt(cx).rz]);
+      const sy = stAt(cx).ry, sz = stAt(cx).rz, k2 = r / 0.92;
+      const p = [cx, Math.cos(th) * sy * k2 * 0.985, Math.sin(th) * sz * k2 * 0.985];
+      const nn = V.norm([0, Math.cos(th) / sy, Math.sin(th) / sz]);
       const tang = V.norm([0, -Math.sin(th), Math.cos(th)]);
       const ax = [1, 0, 0];
-      const sx = (x1 - x0) * 0.30, st = 0.19;
+      const sx = (x1 - x0) * 0.38, st = 0.335;
       const base = [
         V.add(p, V.add(V.mul(ax, -sx), V.mul(tang, -st))), V.add(p, V.add(V.mul(ax, sx), V.mul(tang, -st))),
         V.add(p, V.add(V.mul(ax, sx), V.mul(tang, st))), V.add(p, V.add(V.mul(ax, -sx), V.mul(tang, st))),
       ];
-      raisedPoly(b, base, nn, 0.012, 0.006, cc('armorD'));
+      // raised frame
+      const top = raisedPoly(b, base, nn, 0.045, 0.016, cc('armorL'));
+      // dark inset inside the frame
+      const cen = base.reduce((a, q) => V.add(a, q), [0, 0, 0]).map(v => v / base.length);
+      const inset = base.map(q => V.add(cen, V.mul(V.sub(q, cen), 0.78)));
+      raisedPoly(b, inset.map(q => V.add(q, V.mul(nn, 0.046))), nn, 0.012, 0.006, cc('recess'));
+      for (const su of [-1, 1]) for (const sv of [-1, 1]) {
+        boltAt(b, V.add(V.add(V.add(p, V.mul(ax, su * sx * 1.12)), V.mul(tang, sv * st * 1.12)), V.mul(nn, 0.03)), nn, 0.018, 0.012);
+      }
     }
     // rim ridges at both ends
     for (const [xx, sgn] of [[x0 + 0.02, -1], [x1 - 0.02, 1]]) {
@@ -2279,71 +2287,101 @@ function xBand(b, x, cy, cz, r, w, col, segs = 24) {
 
 // ---------- engine cluster (part 11) ----------
 const ENGINES = [
-  [0.90, 0.70, 0.50], [0.00, 1.06, 0.50], [-0.90, 0.70, 0.50],
-  [0.90, -0.70, 0.50], [0.00, -1.06, 0.50], [-0.90, -0.70, 0.50],
+  [0.96, 0.74, 0.505, 0.06], [0.00, 1.06, 0.535, -0.02], [-0.96, 0.74, 0.505, 0.03],
+  [0.96, -0.74, 0.505, 0.06], [0.00, -1.06, 0.535, -0.02], [-0.96, -0.74, 0.505, 0.03],
 ];
+
+function drumPanel(b, x, cy, cz, r, a, sx, st, h, col) {
+  const rad = [0, Math.cos(a), Math.sin(a)];
+  const tang = [0, -Math.sin(a), Math.cos(a)];
+  const p = [x, cy + r * Math.cos(a), cz + r * Math.sin(a)];
+  obox(b, p, [1, 0, 0], tang, rad, sx, st, h, col);
+}
+
+function buildDrum(b, cy, cz, r, dx) {
+  const xf = 0.34 + dx, xr = -1.90 + dx;
+  const prof = [
+    [xf + 0.05, r * 0.885], [xf + 0.00, r * 0.975], [xf - 0.08, r], [xr + 0.22, r],
+    [xr + 0.05, r * 0.975], [xr - 0.02, r * 0.885],
+  ];
+  xProf(b, prof, cy, cz, 24, cc('armor'), false, false);
+
+  // flat front cap + raised square hatch
+  for (let j = 0; j < 24; j++) {
+    const a0 = j / 24 * TAU, a1 = (j + 1) / 24 * TAU;
+    const P = (a) => [xf + 0.05, cy + r * 0.885 * Math.cos(a), cz + r * 0.885 * Math.sin(a)];
+    b.tri([xf + 0.05, cy, cz], P(a0), P(a1), cc('armorD'), [-1, 0, 0], [-1, 0, 0], [-1, 0, 0]);
+  }
+  raisedOnFrame(b, [xf + 0.05, cy, cz], [0, 1, 0], [0, 0, 1], [-1, 0, 0], r * 0.52, r * 0.52, 0.028, cc('armorL'), 0.03);
+
+  // boxy armoured cap section (4 big plates + corner strips)
+  for (const a of [0.79, 2.36, 3.93, 5.50]) {
+    drumPanel(b, xf - 0.17, cy, cz, r * 1.004, a, 0.15, 0.20, 0.032, cc('armorL'));
+    drumPanel(b, xf - 0.17, cy, cz, r * 1.004, a + 0.785, 0.155, 0.045, 0.026, cc('armorD'));
+  }
+  xBand(b, xf - 0.35, cy, cz, r, 0.05, cc('armorD'));
+  xBand(b, xr + 0.16, cy, cz, r, 0.055, cc('armorD'));
+  xBand(b, xf - 0.70, cy, cz, r, 0.045, cc('armorD'));
+  xBand(b, xf - 1.34, cy, cz, r, 0.045, cc('armorD'));
+
+  // longitudinal ribs (3 segments each)
+  for (const a of [0.32, 1.30, 2.44, 3.56, 4.72, 5.70]) {
+    for (let k = 0; k < 3; k++) {
+      const x = xf - 0.58 - k * 0.45;
+      drumPanel(b, x, cy, cz, r * 1.004, a, 0.185, 0.042, 0.028, cc(k === 1 ? 'armorL' : 'armor'));
+    }
+  }
+  // transverse recessed seams
+  for (const x of [xf - 0.45, xf - 0.93, xf - 1.41, xf - 1.83]) {
+    for (let j = 0; j < 24; j++) {
+      const a0 = j / 24 * TAU, a1 = (j + 1) / 24 * TAU;
+      const P = (xx, a) => [xx, cy + r * 1.002 * Math.cos(a), cz + r * 1.002 * Math.sin(a)];
+      b.quad(P(x, a0), P(x, a1), P(x - 0.018, a1), P(x - 0.018, a0), cc('recess'));
+    }
+  }
+  // upper nub row
+  for (let i = 0; i < 5; i++) {
+    const x = xf - 0.52 - i * 0.30;
+    const y = cy + (r + 0.018) * (cy > 0 ? 0.98 : 0.98);
+    const p = [x, cy + (r + 0.02) * Math.cos(0.22), cz + (r + 0.02) * Math.sin(0.22)];
+    pipe(b, p, [x, p[1] + 0.03, p[2]], 0.02, 0.016, 6, cc('metal'), true);
+  }
+  // side pipe cluster
+  const pa = [xf - 0.22, cy + r * 0.56, cz + r * 0.76], pb = [xr + 0.45, cy + r * 0.56, cz + r * 0.76];
+  pipe(b, pa, pb, 0.026, 0.026, 6, cc('steel'), false);
+  for (let i = 0; i < 3; i++) {
+    const x = xf - 0.35 - i * 0.52;
+    obox(b, [x, cy + r * 0.60, cz + r * 0.78], [1, 0, 0], [0, 1, 0], [0, 0, 1], 0.028, 0.05, 0.06, cc('armorD'));
+  }
+  // rear nozzle recess
+  for (let j = 0; j < 24; j++) {
+    const a0 = j / 24 * TAU, a1 = (j + 1) / 24 * TAU;
+    const P = (a, rr) => [xr - 0.01, cy + rr * Math.cos(a), cz + rr * Math.sin(a)];
+    b.tri(P(a0, r * 0.80), P(a1, r * 0.80), P((a0 + a1) / 2, r * 0.42), cc('recess'), [1, 0, 0], [1, 0, 0], [1, 0, 0]);
+  }
+}
+
 function buildEngines(b) {
   b.begin(11, 0.58, 0, 0);
-  for (const [cy, cz, r] of ENGINES) {
-    const prof = [
-      [0.16, r * 0.20], [0.10, r * 0.55], [0.02, r * 0.83], [-0.08, r * 0.99],
-      [-0.30, r], [-0.70, r], [-1.10, r * 0.985], [-1.55, r * 0.96], [-1.95, r * 0.90], [-2.12, r * 0.82],
-    ];
-    xProf(b, prof, cy, cz, 22, cc('armor'), false, false);
-    // rear nozzle
-    revolveX(b, [[-2.10, 0.001], [-2.10, r * 0.80], [-2.04, r * 0.84]], 22, cc('dark'));
-    for (let j = 0; j < 22; j++) {
-      const a0 = j / 22 * TAU, a1 = (j + 1) / 22 * TAU;
-      const P = (rr, a) => [-2.10, cy + rr * Math.cos(a), cz + rr * Math.sin(a)];
-      b.tri(P(r * 0.8, a0), P(r * 0.8, a1), P(r * 0.45, (a0 + a1) / 2), cc('recess'), [1, 0, 0], [1, 0, 0], [1, 0, 0]);
-    }
-    // bands + bolts
-    for (const x of [-0.35, -1.05, -1.75]) xBand(b, x, cy, cz, r, 0.055, cc('armorD'));
-    for (const x of [-0.55, -1.3]) {
-      for (let k = 0; k < 3; k++) {
-        const a = k / 3 * TAU + 0.4;
-        const p = [x, cy + (r * 1.012) * Math.cos(a), cz + (r * 1.012) * Math.sin(a)];
-        pipe(b, p, [p[0], p[1] * 1.006, p[2] * 1.006], 0.03, 0.03, 6, cc('metal'), false);
-      }
-    }
-    // dorsal detail strip on each drum
-    const up = [0, Math.cos(1.2), Math.sin(1.2)];
-    obox(b, [ -0.9, cy + r * 0.98, cz + r * 0.2 ], [1, 0, 0], [0, 1, 0], [0, 0, 1], 0.5, 0.05, 0.09, cc('dark'));
-    // feed pipe
-    const pa = [0.0, cy + r * 0.55, cz + r * 0.8], pb = [-1.85, cy + r * 0.55, cz + r * 0.8];
-    pipe(b, pa, pb, 0.035, 0.035, 8, cc('steel'), false);
-    for (let k = 0; k < 3; k++) {
-      const x = -0.2 - k * 0.55;
-      const p = [x, cy + r * 0.58, cz + r * 0.83];
-      obox(b, p, [1, 0, 0], [0, 1, 0], [0, 0, 1], 0.03, 0.06, 0.08, cc('armorD'));
-    }
-  }
+  for (const [cy, cz, r, dx] of ENGINES) buildDrum(b, cy, cz, r, dx);
   b.end();
 
-  // cluster collars binding the six drums
-  for (const [xc, w] of [[0.02, 0.10], [-1.92, 0.09]]) {
-    const N = 48;
-    for (let j = 0; j < N; j++) {
-      const a0 = j / N * TAU, a1 = (j + 1) / N * TAU;
-      const P = (x, a, rr) => {
-        const cy = 1.36 * Math.sign(Math.cos(a)) * Math.pow(Math.abs(Math.cos(a)), 0.62);
-        const cz = 1.58 * Math.sign(Math.sin(a)) * Math.pow(Math.abs(Math.sin(a)), 0.62);
-        return [x, cy * rr, cz * rr];
-      };
-      const q = (a) => P(xc, a, 1.0), o = (a) => P(xc, a, 1.06);
-      b.quad(P(xc - w, a0, 1.0), P(xc - w, a1, 1.0), P(xc - w, a1, 1.06), P(xc - w, a0, 1.06), cc('armorD'));
-      b.quad(P(xc - w, a0, 1.06), P(xc - w, a1, 1.06), P(xc + w, a1, 1.06), P(xc + w, a0, 1.06), cc('armorL'));
-      b.quad(P(xc + w, a0, 1.06), P(xc + w, a1, 1.06), P(xc + w, a1, 1.0), P(xc + w, a0, 1.0), cc('armorD'));
-    }
-  }
-  // inter-drum braces and rear plate
   b.begin(11, 0.6, 0, 0);
-  for (const [cy, cz] of [[0, 0.35], [0, -0.35], [0.45, 0], [-0.45, 0]]) {
-    obox(b, [-1.95, cy, cz], [1, 0, 0], [0, 1, 0], [0, 0, 1], 0.06, 0.28, 0.12, cc('armorD'));
-  }
-  for (let i = 0; i < 6; i++) {
-    const a = i / 6 * TAU + 0.26;
-    obox(b, [-2.16, Math.cos(a) * 1.05, Math.sin(a) * 1.35], [1, 0, 0], [0, 1, 0], [0, 0, 1], 0.04, 0.1, 0.1, cc('dark'));
+  // compact dorsal & ventral fairing over the top/bottom drums
+  for (const sgn of [1, -1]) {
+    const y = sgn * 1.40;
+    obox(b, [0.50, y, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1], 0.68, 0.06, 0.43, cc('armor'));
+    obox(b, [0.50, y + sgn * 0.06, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1], 0.54, 0.028, 0.31, cc('armorL'));
+    obox(b, [0.28, y + sgn * 0.08, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1], 0.18, 0.014, 0.20, cc('recess'));
+    for (let i = 0; i < 3; i++) {
+      const x = 0.86 - i * 0.22;
+      obox(b, [x, y + sgn * 0.055, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1], 0.06, 0.016, 0.12, cc('dark'));
+    }
+    obox(b, [0.50, y + sgn * 0.03, 0.38], [1, 0, 0], [0, 1, 0], [0, 0, 1], 0.62, 0.055, 0.045, cc('armorD'));
+    obox(b, [0.50, y + sgn * 0.03, -0.38], [1, 0, 0], [0, 1, 0], [0, 0, 1], 0.62, 0.055, 0.045, cc('armorD'));
+    // beam running aft to the fin root
+    obox(b, [-0.50, y + sgn * 0.05, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1], 0.42, 0.05, 0.08, cc('armorD'));
+    pipe(b, [-0.2, y + sgn * 0.12, 0.2], [-1.6, y + sgn * 0.12, 0.2], 0.022, 0.022, 6, cc('steel'), false);
   }
   b.end();
 }
@@ -2351,114 +2389,130 @@ function buildEngines(b) {
 // ---------- stern core + tail (part 12) ----------
 function buildTail(b) {
   b.begin(12, 0.6, 0, 0);
-  // central tail beam
-  const prof = [[-0.15, 0.46], [-0.9, 0.44], [-1.7, 0.40], [-2.3, 0.33], [-2.9, 0.23], [-3.45, 0.12], [-3.85, 0.02]];
-  xProf(b, prof, 0, 0, 24, cc('armor'), false, true);
-  for (const x of [-0.55, -1.35, -2.2, -2.95]) xBand(b, x, 0, 0, x > -1 ? 0.45 : x > -2.5 ? 0.38 : 0.27, 0.05, cc('armorD'));
-  // tail nozzle block
-  revolveX(b, [[-2.6, 0.32], [-2.66, 0.42], [-2.72, 0.40], [-2.78, 0.30]], 24, cc('dark'));
-  // dorsal & ventral tail spine
-  for (const sgn of [1, -1]) {
+  // central armoured tail block
+  const rings = [];
+  for (let i = 0; i < 7; i++) {
+    const x = lerp(-1.30, -2.55, i / 6);
+    const sc = 1.0 - 0.16 * (i / 6);
     const pts = [];
-    for (let i = 0; i <= 8; i++) {
-      const x = lerp(-0.2, -2.6, i / 8);
-      pts.push([x, sgn * (0.42 + 0.18 * Math.sin(Math.PI * i / 8))]);
+    for (let j = 0; j < 12; j++) {
+      const a = j / 12 * TAU + Math.PI / 12;
+      pts.push([x, 0.64 * sc * Math.cos(a), 0.80 * sc * Math.sin(a)]);
     }
-    for (let i = 0; i < 8; i++) {
-      const [x0, y0] = pts[i], [x1, y1] = pts[i + 1];
-      const w0 = 0.10, w1 = 0.08;
-      const A = [x0, y0, -w0], B = [x0, y0, w0], C = [x1, y1, w1], D = [x1, y1, -w1];
-      b.quad(A, B, C, D, cc('armorD'));
-      b.quad(D, C, B, A, cc('armorD'));
+    rings.push(pts);
+  }
+  for (let i = 0; i < rings.length - 1; i++) for (let j = 0; j < 12; j++) {
+    const j2 = (j + 1) % 12;
+    b.quad(rings[i][j], rings[i][j2], rings[i + 1][j2], rings[i + 1][j], cc('armor'));
+  }
+  for (const [idx, nn] of [[0, [-1, 0, 0]], [rings.length - 1, [1, 0, 0]]]) {
+    const ring = rings[idx], cen = ring.reduce((a, p) => V.add(a, p), [0, 0, 0]).map(v => v / ring.length);
+    for (let j = 0; j < 12; j++) b.tri(cen, ring[j], ring[(j + 1) % 12], cc('armorD'), nn, nn, nn);
+  }
+  // side recessed panels
+  for (const s of [1, -1]) {
+    for (let i = 0; i < 2; i++) {
+      const x = -1.52 - i * 0.52;
+      const p = [x, 0, s * 0.80];
+      const n = [0, 0, s];
+      raisedOnFrame(b, p, [1, 0, 0], [0, 1, 0], n, 0.21, 0.26, 0.032, cc('armorL'), 0.02);
+      raisedOnFrame(b, V.add(p, V.mul(n, 0.032)), [1, 0, 0], [0, 1, 0], n, 0.14, 0.18, 0.012, cc('recess'), 0.008);
+      for (const sx of [-1, 1]) for (const sy of [-1, 1]) boltAt(b, V.add(V.add(p, [sx * 0.22, sy * 0.19, 0]), V.mul(n, 0.02)), n, 0.017, 0.012);
     }
   }
-  // side connector arms to the engine drums
+  // central thruster pod
+  xProf(b, [[-2.20, 0.16], [-2.30, 0.28], [-2.70, 0.29], [-2.86, 0.23], [-2.92, 0.10]], 0, 0, 20, cc('armor'), false, false);
+  revolveX(b, [[-2.92, 0.10], [-2.97, 0.16], [-2.97, 0.20]], 20, cc('dark'));
+  for (const x of [-2.42, -2.68]) xBand(b, x, 0, 0, 0.29, 0.04, cc('armorD'));
+  // fin-root housings top/bottom
   for (const sgn of [1, -1]) {
-    obox(b, [-0.9, 0, sgn * 0.55], [1, 0, 0], [0, 1, 0], [0, 0, 1], 0.55, 0.16, 0.16, cc('armorD'));
-    obox(b, [-2.1, 0, sgn * 0.72], [1, 0, 0], [0, 1, 0], [0, 0, 1], 0.16, 0.12, 0.35, cc('armorD'));
+    obox(b, [-2.18, sgn * 0.60, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1], 0.34, 0.22, 0.36, cc('armorD'));
+    obox(b, [-2.18, sgn * 0.81, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1], 0.23, 0.05, 0.25, cc('armorL'));
   }
-  // greebles on the beam
-  for (let i = 0; i < 5; i++) {
-    const x = -0.4 - i * 0.5;
-    const r = 0.44 - i * 0.035;
-    obox(b, [x, r * 0.92, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1], 0.06, 0.035, 0.10, cc('armorL'));
+  // dark aft plate between the fins
+  for (let j = 0; j < 16; j++) {
+    const a0 = j / 16 * TAU, a1 = (j + 1) / 16 * TAU;
+    b.tri([-2.60, 0, 0], [-2.60, 0.42 * Math.cos(a0), 0.58 * Math.sin(a0)], [-2.60, 0.42 * Math.cos(a1), 0.58 * Math.sin(a1)], cc('recess'), [1, 0, 0], [1, 0, 0], [1, 0, 0]);
   }
   b.end();
 }
 
 // ---------- stern fins (part 13) ----------
-function finBlade(b, angle, scale, col) {
+function finBlade(b, angle, scale) {
   const ca = Math.cos(angle), sa = Math.sin(angle);
   const to3 = (x, r) => [x, r * ca, r * sa];
   const nrm = [0, -sa, ca];
-  const pts = [
-    [-1.60, 0.98], [-1.90, 1.72], [-2.70, 2.30], [-3.50, 2.46],
-    [-3.80, 2.28], [-3.05, 1.55], [-2.35, 1.06], [-1.85, 0.92],
-  ].map(([x, r]) => to3(x, r * scale));
-  const base = pts;
-  raisedPoly(b, base, nrm, 0.030, 0.006, col);
-  raisedPoly(b, base, V.mul(nrm, -1), 0.030, 0.006, col);
-  // inset panel on both faces
-  const cen = pts.reduce((a, p) => V.add(a, p), [0, 0, 0]).map(v => v / pts.length);
-  const inset = pts.map(p => V.add(cen, V.mul(V.sub(p, cen), 0.74)));
-  raisedPoly(b, inset, nrm, 0.012, 0.008, cc('armorD'));
-  raisedPoly(b, inset, V.mul(nrm, -1), 0.012, 0.008, cc('armorD'));
-  // leading edge rib and cross ribs
-  const p0 = to3(-1.82, 1.42 * scale), p1 = to3(-3.55, 2.38 * scale);
-  pipe(b, p0, p1, 0.030, 0.016, 6, cc('armorD'), false);
-  for (let i = 0; i < 3; i++) {
-    const a = to3(-2.1 - i * 0.45, (1.25 + i * 0.32) * scale), b2 = to3(-2.35 - i * 0.45, (1.95 + i * 0.16) * scale);
-    obox(b, V.mul(V.add(a, b2), 0.5), [1, 0, 0], [0, ca, sa], nrm, 0.035, 0.28, 0.022, cc('armorL'));
+  const pts2 = [
+    [-1.55, 0.98], [-2.00, 1.75], [-2.60, 2.30], [-3.20, 2.48], [-3.45, 2.36],
+    [-3.00, 1.80], [-2.40, 1.22], [-1.82, 0.95],
+  ];
+  const base = pts2.map(([x, r]) => to3(x, r * scale));
+  raisedPoly(b, base, nrm, 0.050, 0.016, cc('plate'));
+  raisedPoly(b, base, V.mul(nrm, -1), 0.050, 0.016, cc('plate'));
+  const cen = base.reduce((a, p) => V.add(a, p), [0, 0, 0]).map(v => v / base.length);
+  const inset = base.map(p => V.add(cen, V.mul(V.sub(p, cen), 0.70)));
+  raisedPoly(b, inset, nrm, 0.016, 0.01, cc('armorD'));
+  raisedPoly(b, inset, V.mul(nrm, -1), 0.016, 0.01, cc('armorD'));
+  const pan = base.map(p => V.add(cen, V.mul(V.sub(p, cen), 0.50)));
+  raisedPoly(b, pan, nrm, 0.012, 0.008, cc('armorL'));
+  raisedPoly(b, pan, V.mul(nrm, -1), 0.012, 0.008, cc('armorL'));
+  // vents near the root on both faces
+  for (const s of [1, -1]) {
+    const p = V.add(V.add(to3(-2.18, 1.16 * scale), V.mul(nrm, s * 0.062)), [0.12, 0, 0]);
+    for (let i = 0; i < 3; i++) obox(b, V.add(p, [i * 0.055 - 0.055, 0, 0]), [1, 0, 0], [0, ca, sa], nrm, 0.016, 0.048, 0.007, cc('dark'));
   }
-  // root fairing
-  const root = [to3(-1.55, 0.95 * scale), to3(-1.95, 1.4 * scale), to3(-1.9, 0.85 * scale)];
-  raisedOnFrame(b, to3(-1.75, 1.0 * scale), [1, 0, 0], [0, ca, sa], nrm, 0.2, 0.16, 0.06, cc('armorD'), 0.02);
+  // leading edge rib
+  pipe(b, to3(-1.86, 1.44 * scale), to3(-3.25, 2.38 * scale), 0.028, 0.014, 6, cc('armorD'), false);
+  // hub cylinder along X at the root
+  const hy = ca * scale * 1.02, hz = sa * scale * 1.02, hubX = -1.78;
+  xProf(b, [[hubX + 0.30, 0.14], [hubX + 0.22, 0.27], [hubX - 0.22, 0.27], [hubX - 0.30, 0.14]], hy, hz, 18, cc('armorD'), true, true);
+  for (const x of [hubX + 0.16, hubX, hubX - 0.16]) xBand(b, x, hy, hz, 0.27, 0.032, cc('metal'));
+  // root fairing block
+  obox(b, to3(-1.45, 1.02 * scale), [1, 0, 0], [0, ca, sa], nrm, 0.26, 0.20, 0.24, cc('armorD'));
+  // tip cap
+  obox(b, to3(-3.36, 2.44 * scale), [1, 0, 0], [0, ca, sa], nrm, 0.05, 0.03, 0.02, cc('metal'));
 }
+
 function buildFins(b) {
   b.begin(13, 0.55, 0, 0);
-  for (const [a, s] of [[0, 1.06], [Math.PI, 1.06], [Math.PI / 2, 0.82], [-Math.PI / 2, 0.82], [Math.PI / 4, 0.92], [3 * Math.PI / 4, 0.92], [5 * Math.PI / 4, 0.92], [7 * Math.PI / 4, 0.92]]) {
-    finBlade(b, a, s, cc('armor'));
-  }
-  // fin tip caps
+  for (const d of [0, 60, 120, 180, 240, 300]) finBlade(b, d * Math.PI / 180, 1.10);
   b.end();
 }
 
 // ---------- display stand (part 14) ----------
 function buildStand(b) {
-  b.begin(14, 0.55, 0, 0);
-  const baseY = -3.05;
-  // feet
+  b.begin(14, 0.5, 0, 0);
+  const baseY = -3.0;
+  // V-shaped feet
   for (const s of [-1, 1]) {
-    obox(b, [0.35, baseY, s * 0.62], [1, 0, 0], [0, 1, 0], [0, 0, 1], 1.85, 0.10, 0.26, cc('armorD'));
-    obox(b, [0.35, baseY - 0.02, s * 0.62], [1, 0, 0], [0, 1, 0], [0, 0, 1], 1.65, 0.04, 0.30, cc('dark'));
-    // foot end pads
-    for (const x of [-1.3, 2.0]) obox(b, [x, baseY - 0.05, s * 0.62], [1, 0, 0], [0, 1, 0], [0, 0, 1], 0.22, 0.06, 0.3, cc('dark'));
+    const ang = s * 0.30;
+    const ax = [Math.cos(ang), 0, Math.sin(ang)], az = [-Math.sin(ang), 0, Math.cos(ang)];
+    const c = [0.55 + ax[0] * 1.30, baseY, ax[2] * 1.30];
+    obox(b, c, ax, [0, 1, 0], az, 1.45, 0.065, 0.19, cc('armorD'));
+    obox(b, V.add(c, [0, 0.075, 0]), ax, [0, 1, 0], az, 1.20, 0.018, 0.11, cc('dark'));
+    obox(b, V.add(c, ax.map(v => v * 1.40)), ax, [0, 1, 0], az, 0.17, 0.10, 0.25, cc('dark'));
   }
-  // crossbar
-  obox(b, [0.35, baseY + 0.04, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1], 0.26, 0.08, 0.62, cc('armorD'));
-  // curved arm (segmented)
-  const armPts = [[0.55, baseY + 0.12], [0.5, baseY + 0.55], [0.35, baseY + 1.0], [0.1, baseY + 1.35], [0.0, baseY + 1.62]];
-  for (let i = 0; i < armPts.length - 1; i++) {
-    const [x0, y0] = armPts[i], [x1, y1] = armPts[i + 1];
-    const mx = (x0 + x1) / 2, my = (y0 + y1) / 2;
-    const len = Math.hypot(x1 - x0, y1 - y0);
-    const ang = Math.atan2(y1 - y0, x1 - x0);
-    const ax = [Math.cos(ang), Math.sin(ang), 0], ay = [-Math.sin(ang), Math.cos(ang), 0], az = [0, 0, 1];
-    obox(b, [mx, my, 0], ax, ay, az, len * 0.56, 0.10, 0.075, cc('armorD'));
-    // truss holes
-    for (let k = 0; k < 2; k++) {
-      const t = (k + 0.5) / 2;
-      const px = lerp(x0, x1, t), py = lerp(y0, y1, t);
-      obox(b, [px, py, 0], ax, ay, az, len * 0.12, 0.05, 0.02, cc('recess'));
-    }
+  // centre block
+  obox(b, [0.55, baseY + 0.09, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1], 0.32, 0.09, 0.40, cc('armorD'));
+  // curved I-beam arm
+  const path = [[0.55, baseY + 0.16], [0.72, baseY + 0.72], [0.96, baseY + 1.30], [1.24, baseY + 1.90], [1.50, baseY + 2.18]];
+  for (let i = 0; i < path.length - 1; i++) {
+    const [x0, y0] = path[i], [x1, y1] = path[i + 1];
+    const len = Math.hypot(x1 - x0, y1 - y0), ang = Math.atan2(y1 - y0, x1 - x0);
+    const ax = [Math.cos(ang), Math.sin(ang), 0], ay = [-Math.sin(ang), Math.cos(ang), 0];
+    const c = [(x0 + x1) / 2, (y0 + y1) / 2, 0];
+    obox(b, c, ax, ay, [0, 0, 1], len * 0.55, 0.05, 0.135, cc('dark'));
+    obox(b, V.add(c, V.mul(ay, 0.105)), ax, ay, [0, 0, 1], len * 0.55, 0.032, 0.15, cc('armorD'));
+    obox(b, V.add(c, V.mul(ay, -0.105)), ax, ay, [0, 0, 1], len * 0.55, 0.032, 0.15, cc('armorD'));
+    obox(b, c, ax, ay, [0, 0, 1], len * 0.2, 0.028, 0.02, cc('recess'));
   }
-  // cradle
-  obox(b, [0.0, baseY + 1.7, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1], 0.22, 0.07, 0.34, cc('metal'));
-  for (const s of [-1, 1]) {
-    obox(b, [0.0, baseY + 1.86, s * 0.28], [1, 0, 0], [0, 1, 0], [0, 0, 1], 0.18, 0.24, 0.05, cc('metal'));
-  }
+  // cradle under the hull
+  const cy = -0.70;
+  obox(b, [1.50, cy - 0.12, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1], 0.22, 0.10, 0.30, cc('metal'));
+  for (const s of [-1, 1]) obox(b, [1.50, cy + 0.08, s * 0.22], [1, 0, 0], [0, 1, 0], [0, 0, 1], 0.20, 0.22, 0.045, cc('metal'));
+  obox(b, [1.50, cy + 0.08, 0], [0, 1, 0], [0, 0, 1], [1, 0, 0], 0.20, 0.035, 0.035, cc('steel'));
   // bolts
-  for (const s of [-1, 1]) for (const x of [-1.0, 1.7]) boltAt(b, [x, baseY + 0.11, s * 0.62], [0, 1, 0], 0.035, 0.02);
+  for (const s of [-1, 1]) for (const x of [-0.4, 1.4]) boltAt(b, [x, baseY + 0.10, s * 0.55], [0, 1, 0], 0.03, 0.018);
   b.end();
 }
 
