@@ -1252,7 +1252,7 @@ const PARTS = [
     desc: '尾部中央承力梁与鳍根支座,把五具环绕引擎、尾鳍与舰体主结构连成一体。',
     anchor: [-1.45, 0.55, 0.55], off: [-6.7, 0, 0] },
   { id: 13, name: '尾鳍组', en: 'STERN FINS', color: '#ffc48a',
-    desc: '尾部六片后掠稳定鳍,兼具姿态控制与散热功能,是最醒目的尾部特征。',
+    desc: '尾部五片后掠稳定鳍,与周围五具引擎一一对应,每片鳍根内各藏一根喷管。',
     anchor: [-2.4, 1.55, 0.55], off: [-8.0, 0, 0] },
   { id: 14, name: '展示支架', en: 'DISPLAY STAND', color: '#a9b4c2',
     desc: '套件附带的展示支架:双支脚 + 弯曲支臂 + 承托夹,可单独显示或收起。',
@@ -2435,19 +2435,21 @@ function buildEngines(b) {
     }
     pipe(b, [c[0] - 0.3, c[1] + 0.12, c[2]], [c[0] - 0.9, c[1] + 0.16, c[2]], 0.03, 0.02, 6, cc('metal'), true);
   }
-  // vernier nozzle clusters in the five gaps
+  // vernier clusters: 3 tubes in a small triangle, in the five gaps
   for (const d of [36, 108, 180, 252, 324]) {
     const a0 = d * Math.PI / 180;
-    for (let k = 0; k < 4; k++) {
-      const a = a0 + (k - 1.5) * 0.085;
-      const R = 1.47 + (k % 2) * 0.05;
-      const cy = Math.cos(a) * R, cz = Math.sin(a) * R;
-      const x0 = -1.68, x1 = -2.06;
-      xProf(b, [[x0, 0.055], [x1 - 0.04, 0.05], [x1, 0.032]], cy, cz, 10, cc('metal'), true, false);
-      for (let j = 0; j < 10; j++) {
-        const b0 = j / 10 * TAU, b1 = (j + 1) / 10 * TAU;
-        const P = (a2, rr) => [x1 - 0.005, cy + rr * Math.cos(a2), cz + rr * Math.sin(a2)];
-        b.tri(P(b0, 0.03), P(b1, 0.03), P((b0 + b1) / 2, 0.001), cc('recess'), [1, 0, 0], [1, 0, 0], [1, 0, 0]);
+    const rad = [0, Math.cos(a0), Math.sin(a0)], tang = [0, -Math.sin(a0), Math.cos(a0)];
+    const baseR = 1.49;
+    const baseY = rad[1] * baseR, baseZ = rad[2] * baseR;
+    const offs = [[0.065, 0.0], [-0.065, 0.0], [0.0, -0.10]];
+    for (const [ot, orr] of offs) {
+      const cy = baseY + tang[1] * ot + rad[1] * orr;
+      const cz = baseZ + tang[2] * ot + rad[2] * orr;
+      xProf(b, [[-1.62, 0.052], [-1.78, 0.052], [-2.02, 0.046], [-2.06, 0.030]], cy, cz, 9, cc('metal'), true, false);
+      for (let j = 0; j < 9; j++) {
+        const a1 = j / 9 * TAU, a2 = (j + 1) / 9 * TAU;
+        const P = (a) => [-2.062, cy + 0.032 * Math.cos(a), cz + 0.032 * Math.sin(a)];
+        b.tri(P(a1), P(a2), [-2.066, cy, cz], cc('recess'), [1, 0, 0], [1, 0, 0], [1, 0, 0]);
       }
     }
   }
@@ -2469,7 +2471,7 @@ function buildTail(b) {
     obox(b, [-1.55, cy * 1.35, cz * 1.35], [1, 0, 0], [0, cy, cz], [0, -cz, cy], 0.16, 0.08, 0.14, cc('armorD'));
   }
   // fin-root saddles
-  for (const d of [0, 60, 120, 180, 240, 300]) {
+  for (const d of [0, 72, 144, 216, 288]) {
     const a = d * Math.PI / 180;
     const cy = Math.cos(a), cz = Math.sin(a);
     obox(b, [-1.42, cy * 1.66, cz * 1.66], [1, 0, 0], [0, cy, cz], [0, -cz, cy], 0.30, 0.10, 0.20, cc('armorD'));
@@ -2514,13 +2516,25 @@ function finBlade(b, angle, scale, baseR = 0) {
   for (const x of [hubX + 0.16, hubX, hubX - 0.16]) xBand(b, x, hy, hz, 0.27, 0.032, cc('metal'));
   // root fairing block
   obox(b, to3(-1.45, 1.02), [1, 0, 0], [0, ca, sa], nrm, 0.26, 0.20, 0.24, cc('armorD'));
+  // vernier nozzle embedded in the fin root
+  {
+    const nr = 1.02 * scale + baseR + 0.06;
+    const ny = nr * ca, nz = nr * sa;
+    xProf(b, [[-1.28, 0.058], [-1.44, 0.062], [-1.76, 0.048], [-1.80, 0.032]], ny, nz, 10, cc('metal'), true, false);
+    for (let j = 0; j < 10; j++) {
+      const a0 = j / 10 * TAU, a1 = (j + 1) / 10 * TAU;
+      const P = (a) => [-1.805, ny + 0.034 * Math.cos(a), nz + 0.034 * Math.sin(a)];
+      b.tri(P(a0), P(a1), [-1.81, ny, nz], cc('recess'), [-1, 0, 0], [-1, 0, 0], [-1, 0, 0]);
+    }
+    xBand(b, -1.32, ny, nz, 0.060, 0.032, cc('armorD'));
+  }
   // tip cap
   obox(b, to3(-3.36, 2.44), [1, 0, 0], [0, ca, sa], nrm, 0.05, 0.03, 0.02, cc('metal'));
 }
 
 function buildFins(b) {
   b.begin(13, 0.55, 0, 0);
-  for (const d of [0, 60, 120, 180, 240, 300]) finBlade(b, d * Math.PI / 180, 0.95, 0.72);
+  for (const d of [0, 72, 144, 216, 288]) finBlade(b, d * Math.PI / 180, 0.95, 0.72);
   b.end();
 }
 
