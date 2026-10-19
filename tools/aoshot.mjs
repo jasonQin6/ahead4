@@ -1,0 +1,13 @@
+import { chromium } from '/Users/jason/Library/pnpm/global/5/.pnpm/playwright-core@1.60.0/node_modules/playwright-core/index.mjs';
+import path from 'path';
+const browser = await chromium.launch({ executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', headless: true, args: ['--enable-gpu','--use-angle=metal'] });
+const page = await browser.newPage({ viewport: { width: 1200, height: 800 }, deviceScaleFactor: 1 });
+page.on('pageerror', e => console.log('PAGEERR:', e.message));
+await page.goto('file://' + path.resolve('自然选择号-全舰.html'));
+await page.waitForFunction(() => window.__bow && window.__bow.ready);
+await page.waitForTimeout(1400);
+await page.evaluate(() => { window.__bow.togglePanel(false); window.__bow.setLabels(false); });
+await page.evaluate(() => { window.__bow.state.debugAO = 1; });
+await page.waitForTimeout(300);
+await page.screenshot({ path: 'shots/ao.png' });
+await browser.close();
