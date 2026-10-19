@@ -1256,7 +1256,7 @@ const PARTS = [
     anchor: [-2.6, 1.25, 0.6], off: [-8.0, 0, 0] },
   { id: 14, name: '展示支架', en: 'DISPLAY STAND', color: '#a9b4c2',
     desc: '套件附带的展示支架:双支脚 + 弯曲支臂 + 承托夹,可单独显示或收起。',
-    anchor: [0.4, -2.6, 0.3], off: [0, -3.2, 0] },
+    anchor: [2.1, -2.9, 0.25], off: [0, -3.2, 0] },
 ];
 
 // stand hidden by default
@@ -2287,8 +2287,8 @@ function xBand(b, x, cy, cz, r, w, col, segs = 24) {
 
 // ---------- engine cluster (part 11) ----------
 const ENGINES = [
-  [0.96, 0.74, 0.505, 0.06], [0.00, 1.06, 0.535, -0.02], [-0.96, 0.74, 0.505, 0.03],
-  [0.96, -0.74, 0.505, 0.06], [0.00, -1.06, 0.535, -0.02], [-0.96, -0.74, 0.505, 0.03],
+  [1.02, 0.72, 0.600, 0.06], [0.00, 1.12, 0.635, -0.02], [-1.02, 0.72, 0.600, 0.03],
+  [1.02, -0.72, 0.600, 0.06], [0.00, -1.12, 0.635, -0.02], [-1.02, -0.72, 0.600, 0.03],
 ];
 
 function drumPanel(b, x, cy, cz, r, a, sx, st, h, col) {
@@ -2369,11 +2369,36 @@ function buildDrum(b, cy, cz, r, dx) {
     const x = xf - 0.35 - i * 0.52;
     obox(b, [x, cy + r * 0.60, cz + r * 0.78], [1, 0, 0], [0, 1, 0], [0, 0, 1], 0.028, 0.05, 0.06, cc('armorD'));
   }
-  // rear nozzle recess
+  // large turbine engine face at the stern of each drum
+  const faceX = xr - 0.02;
+  const steps = [[1.02, 0.00], [0.92, 0.05], [0.74, 0.09], [0.56, 0.12], [0.38, 0.14]];
+  const ringP = (rr, a, dx) => [faceX - dx, cy + r * rr * Math.cos(a), cz + r * rr * Math.sin(a)];
+  for (let i = 0; i < steps.length - 1; i++) {
+    const [r0, d0] = steps[i], [r1, d1] = steps[i + 1];
+    for (let j = 0; j < 24; j++) {
+      const a0 = j / 24 * TAU, a1 = (j + 1) / 24 * TAU;
+      b.quad(ringP(r0, a0, d0), ringP(r0, a1, d0), ringP(r1, a1, d1), ringP(r1, a0, d1), i % 2 ? cc('armorD') : cc('armor'));
+    }
+  }
+  // dark inner disc + hub
   for (let j = 0; j < 24; j++) {
     const a0 = j / 24 * TAU, a1 = (j + 1) / 24 * TAU;
-    const P = (a, rr) => [xr - 0.01, cy + rr * Math.cos(a), cz + rr * Math.sin(a)];
-    b.tri(P(a0, r * 0.80), P(a1, r * 0.80), P((a0 + a1) / 2, r * 0.42), cc('recess'), [1, 0, 0], [1, 0, 0], [1, 0, 0]);
+    b.tri([faceX - 0.14, cy, cz], ringP(0.38, a0, 0.14), ringP(0.38, a1, 0.14), cc('recess'), [1, 0, 0], [1, 0, 0], [1, 0, 0]);
+  }
+  xProf(b, [[faceX - 0.14, r * 0.22], [faceX - 0.24, r * 0.22], [faceX - 0.27, r * 0.16]], cy, cz, 18, cc('metal'), false, true);
+  for (const [rad, xx] of [[0.62, 0.07], [0.82, 0.035]]) {
+    for (let j = 0; j < 24; j++) {
+      const a0 = j / 24 * TAU, a1 = (j + 1) / 24 * TAU;
+      b.quad(ringP(rad + 0.035, a0, xx), ringP(rad + 0.035, a1, xx), ringP(rad + 0.035, a1, xx + 0.03), ringP(rad + 0.035, a0, xx + 0.03), cc('armorD'));
+    }
+  }
+  // radial turbine blades
+  for (let k = 0; k < 12; k++) {
+    const a = k / 12 * TAU + Math.PI / 12;
+    const rad = [0, Math.cos(a), Math.sin(a)];
+    const tang = [0, -Math.sin(a), Math.cos(a)];
+    const p = [faceX - 0.10, cy + r * 0.62 * Math.cos(a), cz + r * 0.62 * Math.sin(a)];
+    obox(b, p, [1, 0, 0], rad, tang, 0.028, r * 0.22, 0.045, cc('armorL'));
   }
 }
 
@@ -2491,44 +2516,52 @@ function finBlade(b, angle, scale) {
 
 function buildFins(b) {
   b.begin(13, 0.55, 0, 0);
-  for (const d of [0, 60, 120, 180, 240, 300]) finBlade(b, d * Math.PI / 180, 1.10);
+  for (const d of [0, 60, 120, 180, 240, 300]) finBlade(b, d * Math.PI / 180, 1.22);
   b.end();
 }
 
 // ---------- display stand (part 14) ----------
 function buildStand(b) {
   b.begin(14, 0.5, 0, 0);
-  const baseY = -3.0;
-  // V-shaped feet
-  for (const s of [-1, 1]) {
-    const ang = s * 0.30;
-    const ax = [Math.cos(ang), 0, Math.sin(ang)], az = [-Math.sin(ang), 0, Math.cos(ang)];
-    const c = [0.55 + ax[0] * 1.30, baseY, ax[2] * 1.30];
-    obox(b, c, ax, [0, 1, 0], az, 1.45, 0.065, 0.19, cc('armorD'));
-    obox(b, V.add(c, [0, 0.075, 0]), ax, [0, 1, 0], az, 1.20, 0.018, 0.11, cc('dark'));
-    obox(b, V.add(c, ax.map(v => v * 1.40)), ax, [0, 1, 0], az, 0.17, 0.10, 0.25, cc('dark'));
+  const baseY = -3.62;
+  // flat rounded base plate
+  obox(b, [2.10, baseY, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1], 1.16, 0.085, 0.60, cc('dark'));
+  obox(b, [2.10, baseY + 0.085, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1], 1.02, 0.012, 0.46, cc('armorD'));
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+    obox(b, [2.10 + sx * 1.00, baseY, sz * 0.50], [1, 0, 0], [0, 1, 0], [0, 0, 1], 0.10, 0.085, 0.10, cc('armorD'));
   }
-  // centre block
-  obox(b, [0.55, baseY + 0.09, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1], 0.32, 0.09, 0.40, cc('armorD'));
-  // curved I-beam arm
-  const path = [[0.55, baseY + 0.16], [0.72, baseY + 0.72], [0.96, baseY + 1.30], [1.24, baseY + 1.90], [1.50, baseY + 2.18]];
-  for (let i = 0; i < path.length - 1; i++) {
-    const [x0, y0] = path[i], [x1, y1] = path[i + 1];
-    const len = Math.hypot(x1 - x0, y1 - y0), ang = Math.atan2(y1 - y0, x1 - x0);
-    const ax = [Math.cos(ang), Math.sin(ang), 0], ay = [-Math.sin(ang), Math.cos(ang), 0];
-    const c = [(x0 + x1) / 2, (y0 + y1) / 2, 0];
-    obox(b, c, ax, ay, [0, 0, 1], len * 0.55, 0.05, 0.135, cc('dark'));
-    obox(b, V.add(c, V.mul(ay, 0.105)), ax, ay, [0, 0, 1], len * 0.55, 0.032, 0.15, cc('armorD'));
-    obox(b, V.add(c, V.mul(ay, -0.105)), ax, ay, [0, 0, 1], len * 0.55, 0.032, 0.15, cc('armorD'));
-    obox(b, c, ax, ay, [0, 0, 1], len * 0.2, 0.028, 0.02, cc('recess'));
+  // truss arm rising to the ring saddle
+  const armBase = [2.10, baseY + 0.12], armTop = [2.42, baseY + 0.86];
+  const dx = armTop[0] - armBase[0], dy = armTop[1] - armBase[1];
+  const len = Math.hypot(dx, dy), ang = Math.atan2(dy, dx);
+  const ax = [Math.cos(ang), Math.sin(ang), 0], ay = [-Math.sin(ang), Math.cos(ang), 0];
+  const mid = [(armBase[0] + armTop[0]) / 2, (armBase[1] + armTop[1]) / 2, 0];
+  // two side plates with triangular truss openings
+  for (const sz of [-1, 1]) {
+    obox(b, [mid[0], mid[1], sz * 0.16], ax, ay, [0, 0, 1], len * 0.55, 0.26, 0.03, cc('armorD'));
+    // triangular openings (dark insets)
+    for (let i = 0; i < 3; i++) {
+      const t = (i + 0.5) / 3;
+      const px = lerp(armBase[0], armTop[0], t), py = lerp(armBase[1], armTop[1], t);
+      obox(b, [px, py, sz * 0.176], ax, ay, [0, 0, 1], 0.045, 0.07, 0.012, cc('recess'));
+    }
   }
-  // cradle under the hull
-  const cy = -0.70;
-  obox(b, [1.50, cy - 0.12, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1], 0.22, 0.10, 0.30, cc('metal'));
-  for (const s of [-1, 1]) obox(b, [1.50, cy + 0.08, s * 0.22], [1, 0, 0], [0, 1, 0], [0, 0, 1], 0.20, 0.22, 0.045, cc('metal'));
-  obox(b, [1.50, cy + 0.08, 0], [0, 1, 0], [0, 0, 1], [1, 0, 0], 0.20, 0.035, 0.035, cc('steel'));
-  // bolts
-  for (const s of [-1, 1]) for (const x of [-0.4, 1.4]) boltAt(b, [x, baseY + 0.10, s * 0.55], [0, 1, 0], 0.03, 0.018);
+  // front/back webs
+  for (const sz of [-0.16, 0.16]) {
+    obox(b, [mid[0], mid[1], sz], ax, ay, [0, 0, 1], len * 0.5, 0.035, 0.028, cc('armorD'));
+  }
+  // saddle under the ring
+  const sx = 2.42, sy = baseY + 0.96;
+  obox(b, [sx, sy, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1], 0.24, 0.05, 0.30, cc('metal'));
+  for (const sz of [-1, 1]) {
+    obox(b, [sx - 0.10, sy + 0.14, sz * 0.24], [1, 0, 0], [0, 1, 0], [0, 0, 1], 0.28, 0.16, 0.05, cc('metal'));
+    obox(b, [sx + 0.16, sy + 0.10, sz * 0.24], [1, 0, 0], [0, 1, 0], [0, 0, 1], 0.10, 0.10, 0.05, cc('armorD'));
+  }
+  // cross pin + bolts
+  obox(b, [sx, sy + 0.10, 0], [0, 1, 0], [0, 0, 1], [1, 0, 0], 0.035, 0.035, 0.30, cc('steel'));
+  for (const sx2 of [-1, 1]) for (const sz of [-1, 1]) {
+    boltAt(b, [2.10 + sx2 * 0.9, baseY + 0.09, sz * 0.42], [0, 1, 0], 0.03, 0.018);
+  }
   b.end();
 }
 
