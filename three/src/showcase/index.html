@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>自然选择号 · 前进四 — 三体II 黑暗森林 动态场景</title>
+<meta name="description" content="依据《三体II：黑暗森林》复原的自然选择号动态场景：深空巡航、木星背阴面军港、前进四点亮小太阳与木星上的巨大舰影。three.js 实时渲染。">
+<meta name="theme-color" content="#000206">
+<meta name="color-scheme" content="dark">
+<meta property="og:title" content="自然选择号 · 前进四">
+<meta property="og:description" content="漆黑深空、木星背阴面与一颗突然出现的小太阳。three.js 实时场景复原。">
+<meta property="og:type" content="website">
+<link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%3E%3Crect%20width%3D%2264%22%20height%3D%2264%22%20rx%3D%2214%22%20fill%3D%22%23000206%22%2F%3E%3Ccircle%20cx%3D%2232%22%20cy%3D%2232%22%20r%3D%227%22%20fill%3D%22%23dff1ff%22%2F%3E%3Ccircle%20cx%3D%2232%22%20cy%3D%2232%22%20r%3D%2217%22%20fill%3D%22none%22%20stroke%3D%22%236fa8d8%22%20stroke-width%3D%221.5%22%20opacity%3D%22.7%22%2F%3E%3C%2Fsvg%3E">
+<style>
+/*__CSS__*/
+</style>
+</head>
+<body>
+<canvas id="gl" aria-label="自然选择号穿越木星轨道的三维动态场景"></canvas>
+
+<header class="top">
+  <div class="brand">
+    <div class="eyebrow"><span class="tag">三体 II</span><span>黑暗森林 · 场景复原</span></div>
+    <h1>自然选择号<em>NATURAL SELECTION</em></h1>
+  </div>
+  <nav class="top-actions" aria-label="站点操作">
+    <a href="atlas.html" target="_blank" rel="noopener">全舰图鉴 <span aria-hidden="true">↗</span></a>
+    <button type="button" id="btnFull" aria-label="全屏观看" title="全屏">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><path d="M6 2H2v4M10 2h4v4M6 14H2v-4M10 14h4v-4"/></svg>
+    </button>
+  </nav>
+</header>
+
+<aside class="acts" id="acts" aria-label="幕次导航">
+  <button type="button" data-act="0" class="on"><i>01</i><span>巡航</span><em>CRUISE</em></button>
+  <button type="button" data-act="1"><i>02</i><span>军港</span><em>PORT</em></button>
+  <button type="button" data-act="2"><i>03</i><span>前进四</span><em>FORWARD IV</em></button>
+  <button type="button" data-act="3"><i>04</i><span>余晖</span><em>AFTERGLOW</em></button>
+</aside>
+
+<section class="caption" id="caption" aria-live="polite">
+  <div class="chap" id="chap">01 / 巡航 · CRUISE</div>
+  <h2 id="title">一％光速</h2>
+  <blockquote id="quote">在这无垠的外太空，它的速度丝毫显现不出来……仿佛静止地悬浮于深邃的空间中。</blockquote>
+  <div class="note" id="note">木星与土星轨道之间 · 航向天鹅座</div>
+  <dl class="readouts" id="readouts"></dl>
+</section>
+
+<div class="hint" id="hint"><span>拖拽</span> 环视 <b>·</b> <span>滚轮</span> 缩放</div>
+
+<footer class="console">
+  <div class="timeline" id="timeline" role="slider" aria-label="场景时间轴" aria-valuemin="0" aria-valuemax="88" aria-valuenow="0" tabindex="0">
+    <div class="line"><div class="fill" id="fill"></div></div>
+    <div class="marks" id="marks"></div>
+  </div>
+  <div class="controls">
+    <button type="button" id="prev" aria-label="上一幕" title="上一幕 (←)">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><path d="M10.5 3.5 5.5 8l5 4.5"/><path d="M4 3v10"/></svg>
+    </button>
+    <button type="button" id="play" class="primary" aria-label="暂停" title="播放 / 暂停 (空格)">
+      <svg class="ico-pause" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><rect x="4" y="3" width="3" height="10" rx="1"/><rect x="9" y="3" width="3" height="10" rx="1"/></svg>
+      <svg class="ico-play" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M5 3.2v9.6c0 .5.6.9 1 .6l7-4.8c.4-.3.4-.9 0-1.2l-7-4.8c-.4-.3-1 0-1 .6Z"/></svg>
+    </button>
+    <button type="button" id="next" aria-label="下一幕" title="下一幕 (→)">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><path d="M5.5 3.5 10.5 8l-5 4.5"/><path d="M12 3v10"/></svg>
+    </button>
+    <span class="clock" id="clock">00:00 <i>/ 01:28</i></span>
+    <span class="status" id="status">PLAYING</span>
+    <div class="meter" title="发动机功率">
+      <span>DRIVE</span>
+      <div><b id="thr"></b></div>
+    </div>
+  </div>
+</footer>
+
+<div class="source">依据刘慈欣《三体II：黑暗森林》下部第 6、8、10 节场景复原 · 非官方同人项目</div>
+
+<div class="dip" id="dip" aria-hidden="true"></div>
+
+<div class="boot" id="boot">
+  <div class="b1">DARK FOREST / SCENE ARCHIVE</div>
+  <div class="b2">正在建立深空链路</div>
+  <div class="bl"><i></i></div>
+</div>
+
+<noscript><div class="noscript">请启用 JavaScript 以查看实时三维场景。</div></noscript>
+
+<script>
+/*__JS__*/
+</script>
+</body>
+</html>

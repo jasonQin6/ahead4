@@ -1,0 +1,17 @@
+import { chromium } from 'playwright-core';
+const browser = await chromium.launch({ executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', headless: true, args: ['--enable-gpu','--use-angle=metal'] });
+const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 3, isMobile: true, hasTouch: true });
+const errors = [];
+page.on('pageerror', e => errors.push(e.message));
+await page.goto('http://127.0.0.1:8137/index.html', { waitUntil: 'load' });
+await page.waitForFunction(() => window.__scene && window.__scene.ready, null, { timeout: 30000 });
+await page.waitForTimeout(2000);
+await page.evaluate(() => window.__scene.pause());
+await page.evaluate(() => { const A = window.__scene.acts[2]; window.__scene.seek(A.start + 0.55*(A.end-A.start)); });
+await page.waitForTimeout(600);
+await page.screenshot({ path: 'shots/showcase/mobile_act2.png' });
+await page.evaluate(() => { const A = window.__scene.acts[0]; window.__scene.seek(A.start + 0.4*(A.end-A.start)); });
+await page.waitForTimeout(600);
+await page.screenshot({ path: 'shots/showcase/mobile_act0.png' });
+console.log(JSON.stringify({ errors }));
+await browser.close();

@@ -1,0 +1,20 @@
+import { chromium } from 'playwright-core';
+const browser = await chromium.launch({ executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', headless: true, args: ['--enable-gpu','--use-angle=metal'] });
+const page = await browser.newPage({ viewport: { width: 1600, height: 1000 }, deviceScaleFactor: 1.5 });
+await page.goto('http://127.0.0.1:8137/index.html', { waitUntil: 'load' });
+await page.waitForFunction(() => window.__scene && window.__scene.ready, null, { timeout: 30000 });
+await page.waitForTimeout(2000);
+await page.evaluate(() => window.__scene.pause());
+await page.evaluate(() => { const A = window.__scene.acts[1]; window.__scene.seek(A.start + 0.9 * (A.end - A.start)); });
+await page.waitForTimeout(700);
+const el = await page.evaluate(() => {
+  const e = document.elementFromPoint(1829/1.5, 849/1.5);
+  return e ? { tag: e.tagName, cls: e.className, id: e.id, html: e.outerHTML.slice(0,300) } : null;
+});
+console.log('elementFromPoint:', JSON.stringify(el));
+console.log('canvasRect:', JSON.stringify(await page.evaluate(() => { const c = document.querySelector('canvas'); const r = c.getBoundingClientRect(); return {x:r.x,y:r.y,w:r.width,h:r.height}; })));
+await page.locator('canvas').screenshot({ path: 'shots/showcase/_dbg_canvas.png' });
+await page.screenshot({ path: 'shots/showcase/_dbg_full1.png' });
+await page.waitForTimeout(800);
+await page.screenshot({ path: 'shots/showcase/_dbg_full2.png' });
+await browser.close();

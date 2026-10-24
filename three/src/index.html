@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>自然选择号 · 全舰 — three.js 版</title>
+<meta name="description" content="自然选择号拼装模型的全舰 3D 复原（three.js 版）：双轨主炮、锥盾、主装甲、巨环、球形储罐、引擎组、尾鳍与展示支架。按需渲染、半分辨率 SSAO、索引化压缩顶点、CPU 拾取。">
+<meta name="theme-color" content="#e3e6e8">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%3E%3Crect%20width%3D%2264%22%20height%3D%2264%22%20rx%3D%2214%22%20fill%3D%22%2310161c%22%2F%3E%3Cg%20fill%3D%22none%22%20stroke%3D%22%236fd8ff%22%20stroke-width%3D%223%22%3E%3Ccircle%20cx%3D%2240%22%20cy%3D%2232%22%20r%3D%2217%22%2F%3E%3Cpath%20d%3D%22M6%2032h22M28%2027l8%205-8%205%22%2F%3E%3C%2Fg%3E%3C%2Fsvg%3E">
+<style>
+/*__CSS__*/
+</style>
+</head>
+<body>
+<canvas id="gl" aria-label="自然选择号全舰三维视图，可拖拽旋转、滚轮缩放、点击构件"></canvas>
+<svg id="leaders" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"></svg>
+<div id="labels" aria-hidden="true"></div>
+
+<div class="hero">
+  <div class="eyebrow"><span class="tag">three.js</span><span>完整舰体 / 全舰组装</span></div>
+  <h1>自然选择号<b>全舰</b></h1>
+  <div class="sub">NATURAL SELECTION · FLAGSHIP — 双轨主炮 → 巨环 → 引擎组 → 尾鳍</div>
+  <div class="rule"></div>
+</div>
+
+<div class="meta" id="meta"></div>
+<button type="button" class="themebtn" id="themeBtn" title="切换影棚 / 深空" aria-label="切换影棚 / 深空">◐</button>
+<div class="perf" id="perf" aria-hidden="true"></div>
+
+<aside class="panel" id="panel" aria-label="构件列表">
+  <div class="panel-head"><span class="t">构件 / MODULES</span><span class="c" id="modCount">15</span></div>
+  <div class="list" id="list"></div>
+  <div class="detail" id="detail"></div>
+</aside>
+
+<div class="bar" id="bar" role="toolbar" aria-label="视图控制">
+  <button type="button" class="btn" id="btnExplode" title="分解 / 装配 (E)" aria-pressed="false">
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" aria-hidden="true"><path d="M8 2v12M2.5 5l11 6M13.5 5l-11 6"/></svg>
+    <span>分解</span>
+  </button>
+  <div class="expl"><span class="lb">EXPLODE</span><input id="explode" type="range" min="0" max="100" value="0" aria-label="分解程度"></div>
+  <div class="sep"></div>
+  <button type="button" class="btn on" id="btnLabels" title="构件标注 (L)" aria-pressed="true">
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" aria-hidden="true"><circle cx="4" cy="12" r="1.4"/><path d="M5 11l4.5-6H14"/></svg>
+    <span>标注</span>
+  </button>
+  <button type="button" class="btn" id="btnAuto" title="自动环绕 (空格)" aria-pressed="false">
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" aria-hidden="true"><path d="M13 8a5 5 0 1 1-1.6-3.7"/><path d="M13 2v3h-3"/></svg>
+    <span>环绕</span>
+  </button>
+  <div class="sep"></div>
+  <div class="theme" id="themeSeg" role="group" aria-label="主题">
+    <button type="button" class="btn on" data-theme="light" aria-pressed="true">影棚</button>
+    <button type="button" class="btn" data-theme="dark" aria-pressed="false">深空</button>
+  </div>
+  <button type="button" class="btn only-narrow" id="btnPanel" title="构件列表" aria-expanded="false" aria-controls="panel">
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" aria-hidden="true"><path d="M3 4h10M3 8h10M3 12h10"/></svg>
+    <span>构件</span>
+  </button>
+  <button type="button" class="btn" id="btnStand" title="展示支架">
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" aria-hidden="true"><path d="M3 13h10M8 13v-3M5 10h6l-1-2H6l-1 2Z"/></svg>
+    <span>支架</span>
+  </button>
+  <button type="button" class="btn" id="btnReset" title="复位视角 (R)">
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" aria-hidden="true"><path d="M3 8a5 5 0 1 0 1.6-3.7"/><path d="M3 2v3h3"/></svg>
+    <span>复位</span>
+  </button>
+</div>
+
+<div class="hint" aria-hidden="true">
+  <span><span class="k">拖拽</span> 旋转</span>
+  <span><span class="k">滚轮</span> 缩放</span>
+  <span><span class="k">点击</span> 构件</span>
+  <span><span class="k">空格</span> 环绕</span>
+  <span><span class="k">P</span> 性能</span>
+</div>
+
+<svg class="axes" viewBox="0 0 88 88" id="axes" aria-hidden="true">
+  <circle cx="44" cy="44" r="26" fill="none" stroke="var(--line)" stroke-width=".8"/>
+  <line id="axx" class="ax1" x1="44" y1="44" x2="44" y2="20"/>
+  <line id="axy" class="ax2" x1="44" y1="44" x2="44" y2="20"/>
+  <line id="axz" class="ax3" x1="44" y1="44" x2="44" y2="20"/>
+  <text id="tx" x="44" y="14" text-anchor="middle" fill="var(--accent)">前</text>
+  <text id="ty" x="44" y="14" text-anchor="middle">上</text>
+  <text id="tz" x="44" y="14" text-anchor="middle">左</text>
+</svg>
+
+<noscript><div class="noscript">请启用 JavaScript 以查看 3D 全舰</div></noscript>
+<div id="boot">
+  <div class="b1">NATURAL SELECTION — THREE.JS</div>
+  <div class="b2">正在构建全舰网格</div>
+  <div class="bar2"><i></i></div>
+</div>
+
+<script>
+/*__JS__*/
+</script>
+</body>
+</html>
