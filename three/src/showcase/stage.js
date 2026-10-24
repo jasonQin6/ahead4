@@ -56,7 +56,10 @@ const COMP_FS = `
 precision highp float;
 varying vec2 vUv;
 uniform sampler2D uScene;
-uniform sampler2D uBloom;
+uniform sampler2D uBloom0;
+uniform sampler2D uBloom1;
+uniform sampler2D uBloom2;
+uniform sampler2D uStreak;
 uniform vec2 uRes;
 uniform float uTime;
 uniform float uBloomStrength;
@@ -70,29 +73,36 @@ float hash21(vec2 p){
   p += dot(p, p + 34.23);
   return fract(p.x * p.y);
 }
-vec3 tone(vec3 c){
-  c *= uExposure;
-  c = c / (c + vec3(0.94)) * 1.66;
-  return pow(max(c, vec3(0.0)), vec3(0.4545));
+vec3 aces(vec3 c){
+  return clamp((c * (2.51 * c + 0.03)) / (c * (2.43 * c + 0.59) + 0.14), 0.0, 1.0);
 }
 void main(){
   vec2 uv = vUv;
   vec2 q = uv - 0.5;
-  float ca = 0.0015 * dot(q, q);
+  float ca = 0.0012 * dot(q, q);
   vec3 sc;
   sc.r = texture2D(uScene, uv + q * ca).r;
   sc.g = texture2D(uScene, uv).g;
   sc.b = texture2D(uScene, uv - q * ca).b;
 
-  vec3 bl = texture2D(uBloom, uv).rgb;
+  vec3 bl = texture2D(uBloom0, uv).rgb * 0.62
+          + texture2D(uBloom1, uv).rgb * 0.44
+          + texture2D(uBloom2, uv).rgb * 0.34;
   vec3 col = sc + bl * uBloomStrength;
-  col += vec3(0.62, 0.78, 1.0) * uFlash;
-  col = tone(col);
+  col += texture2D(uStreak, uv).rgb * vec3(0.30, 0.48, 0.85) * uBloomStrength * 0.85;
+  col += vec3(0.62, 0.78, 1.0) * uFlash * 1.15;
+
+  col = aces(col * uExposure);
+  col = pow(col, vec3(0.4545));
 
   // deep-space colour grade: cool shadows, restrained warm highlights
   float l = dot(col, vec3(0.299, 0.587, 0.114));
   col = mix(col, col * vec3(0.84, 0.92, 1.06), (1.0 - l) * 0.55);
   col = mix(col, col * vec3(1.03, 1.0, 0.96), smoothstep(0.55, 1.0, l) * 0.35);
+  col = mix(vec3(dot(col, vec3(0.299, 0.587, 0.114))), col, 1.06);
+
+  // gentle filmic S-curve: deeper space, crisper speculars
+  col = mix(col, smoothstep(0.0, 1.0, col), 0.16);
 
   col *= 1.0 - uVig * dot(q, q) * 1.35;
   col = mix(col, vec3(0.0), smoothstep(0.42, 0.95, dot(q, q)) * 0.30);
@@ -136,8 +146,8 @@ export class Stage {
     this.scene.add(this.bg);
 
     this.stars = createStarfield({
-      count: this.mobile ? 6500 : 15000,
-      bandCount: this.mobile ? 3800 : 9000,
+      count: this.mobile ? 9000 : 20000,
+      bandCount: this.mobile ? 22000 : 62000,
     });
     this.scene.add(this.stars.group);
 
@@ -169,7 +179,7 @@ export class Stage {
   _buildLights() {
     this.sunDir = new THREE.Vector3(-0.55, 0.10, -0.82).normalize();
 
-    this.hemi = new THREE.HemisphereLight(0x0a1828, 0x000000, 0.42);
+    this.hemi = new THREE.HemisphereLight(0x0a1828, 0x000000, 0.48);
     this.scene.add(this.hemi);
 
     this.lightTarget = new THREE.Object3D();
@@ -180,12 +190,12 @@ export class Stage {
     this.sunLight.target = this.lightTarget;
     this.scene.add(this.sunLight);
 
-    this.rimLight = new THREE.DirectionalLight(0x4f7dbb, 0.62);
+    this.rimLight = new THREE.DirectionalLight(0x4f7dbb, 0.85);
     this.rimLight.position.set(0.35, -0.55, 0.76).normalize().multiplyScalar(100);
     this.rimLight.target = this.lightTarget;
     this.scene.add(this.rimLight);
 
-    this.cameraFill = new THREE.DirectionalLight(0x8fb6dd, 0.30);
+    this.cameraFill = new THREE.DirectionalLight(0x8fb6dd, 0.42);
     this.cameraFill.target = this.lightTarget;
     this.scene.add(this.cameraFill);
 
@@ -219,10 +229,13 @@ export class Stage {
       depthBuffer: false,
       stencilBuffer: false,
     };
-    this.bloomRT = new THREE.WebGLRenderTarget(1, 1, bloomOpts);
-    this.bloomRT2 = new THREE.WebGLRenderTarget(1, 1, bloomOpts);
-    this.bloomRT.texture.colorSpace = THREE.NoColorSpace;
-    this.bloomRT2.texture.colorSpace = THREE.NoColorSpace;
+    const mkBloomRT = () => {
+      const rt = new THREE.WebGLRenderTarget(1, 1, bloomOpts);
+      rt.texture.colorSpace = THREE.NoColorSpace;
+      return rt;
+    };
+    this.bloomLevels = [0, 1, 2].map(() => ({ a: mkBloomRT(), b: mkBloomRT() }));
+    this.streak = { a: mkBloomRT(), b: mkBloomRT() };
 
     this.postScene = new THREE.Scene();
     this.postCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
@@ -234,8 +247,8 @@ export class Stage {
       uniforms: {
         uTex: { value: null },
         uTexel: { value: new THREE.Vector2() },
-        uThreshold: { value: 0.85 },
-        uKnee: { value: 0.45 },
+        uThreshold: { value: 0.92 },
+        uKnee: { value: 0.40 },
       },
       vertexShader: POST_VS,
       fragmentShader: BRIGHT_FS,
@@ -255,14 +268,17 @@ export class Stage {
     this.compMat = new THREE.ShaderMaterial({
       uniforms: {
         uScene: { value: null },
-        uBloom: { value: null },
+        uBloom0: { value: null },
+        uBloom1: { value: null },
+        uBloom2: { value: null },
+        uStreak: { value: null },
         uRes: { value: new THREE.Vector2(1, 1) },
         uTime: { value: 0 },
         uBloomStrength: { value: 0.7 },
         uExposure: { value: 1.0 },
         uFlash: { value: 0 },
         uVig: { value: 0.42 },
-        uGrain: { value: 0.012 },
+        uGrain: { value: 0.010 },
       },
       vertexShader: POST_VS,
       fragmentShader: COMP_FS,
@@ -296,11 +312,20 @@ export class Stage {
     this.H = H;
     this.bw = Math.max(1, Math.round(W * 0.5));
     this.bh = Math.max(1, Math.round(H * 0.5));
+    this.bloomSizes = [0.5, 0.25, 0.125].map((s) => [
+      Math.max(1, Math.round(W * s)),
+      Math.max(1, Math.round(H * s)),
+    ]);
+    this.streakSize = this.bloomSizes[1];
 
     this.renderer.setSize(W, H, false);
     this.sceneRT.setSize(W, H);
-    this.bloomRT.setSize(this.bw, this.bh);
-    this.bloomRT2.setSize(this.bw, this.bh);
+    this.bloomLevels.forEach((lv, i) => {
+      lv.a.setSize(this.bloomSizes[i][0], this.bloomSizes[i][1]);
+      lv.b.setSize(this.bloomSizes[i][0], this.bloomSizes[i][1]);
+    });
+    this.streak.a.setSize(this.streakSize[0], this.streakSize[1]);
+    this.streak.b.setSize(this.streakSize[0], this.streakSize[1]);
     this.camera.aspect = cssW / cssH;
     this.camera.updateProjectionMatrix();
     this.stars.setDpr(ratio);
@@ -317,24 +342,51 @@ export class Stage {
     this.cameraFill.position.copy(this.camera.position);
     this.lightTarget.position.set(0, 0.2, 0);
     this.moonLight.position.copy(this.jupiter.group.position).lerp(this.camera.position, 0.55);
+    this.engine.update(this.camera, state.dt || 0.016);
 
     r.setRenderTarget(this.sceneRT);
     r.render(this.scene, this.camera);
 
     this.brightMat.uniforms.uTex.value = this.sceneRT.texture;
-    this._pass(this.brightMat, this.bloomRT);
+    this._pass(this.brightMat, this.bloomLevels[0].a);
 
+    // progressively wider blur pyramids give a soft, film-like halo
     const b = this.blurMat.uniforms;
-    b.uTex.value = this.bloomRT.texture;
-    b.uDir.value.set(1 / this.bw, 0);
-    this._pass(this.blurMat, this.bloomRT2);
-    b.uTex.value = this.bloomRT2.texture;
-    b.uDir.value.set(0, 1 / this.bh);
-    this._pass(this.blurMat, this.bloomRT);
+    for (let i = 0; i < this.bloomLevels.length; i++) {
+      const lv = this.bloomLevels[i];
+      const src = i === 0 ? lv.a : this.bloomLevels[i - 1].a;
+      const sw = i === 0 ? this.W : this.bloomSizes[i - 1][0];
+      const sh = i === 0 ? this.H : this.bloomSizes[i - 1][1];
+      const texel = [1 / sw, 1 / sh];
+      if (i > 0) {
+        b.uTex.value = src.texture;
+        b.uDir.value.set(texel[0], 0);
+        this._pass(this.blurMat, lv.a);
+      }
+      b.uTex.value = lv.a.texture;
+      b.uDir.value.set(1 / this.bloomSizes[i][0], 0);
+      this._pass(this.blurMat, lv.b);
+      b.uTex.value = lv.b.texture;
+      b.uDir.value.set(0, 1 / this.bloomSizes[i][1]);
+      this._pass(this.blurMat, lv.a);
+    }
+
+    // anamorphic streak for the drive: kept very low, only the hottest pixels reach it
+    const st = this.streak;
+    b.uTex.value = this.bloomLevels[1].a.texture;
+    b.uDir.value.set(5 / this.streakSize[0], 0);
+    this._pass(this.blurMat, st.a);
+    b.uTex.value = st.a.texture;
+    this._pass(this.blurMat, st.b);
+    b.uTex.value = st.b.texture;
+    this._pass(this.blurMat, st.a);
 
     const c = this.compMat.uniforms;
     c.uScene.value = this.sceneRT.texture;
-    c.uBloom.value = this.bloomRT.texture;
+    c.uBloom0.value = this.bloomLevels[0].a.texture;
+    c.uBloom1.value = this.bloomLevels[1].a.texture;
+    c.uBloom2.value = this.bloomLevels[2].a.texture;
+    c.uStreak.value = st.a.texture;
     c.uTime.value = state.time || 0;
     c.uBloomStrength.value = state.bloom !== undefined ? state.bloom : 0.7;
     c.uExposure.value = state.exposure !== undefined ? state.exposure : 1.0;
