@@ -24,9 +24,9 @@ export const ACTS = [
     ],
     cam: [
       { t: 0.00, yaw: 0.95, pitch: 0.18, dist: 48, target: [0.0, 0.5, 0], fov: 32, roll: 0.010, shift: 0.105 },
-      { t: 0.42, yaw: 0.58, pitch: 0.09, dist: 35, target: [0.4, 0.4, 0], fov: 32, roll: 0.006, shift: 0.100 },
-      { t: 0.74, yaw: 0.12, pitch: 0.02, dist: 26, target: [0.5, 0.3, 0], fov: 34, roll: 0.000, shift: 0.085 },
-      { t: 1.00, yaw: 0.40, pitch: 0.11, dist: 31, target: [0.5, 0.5, 0], fov: 34, roll: 0.004, shift: 0.090 },
+      { t: 0.42, yaw: 0.79, pitch: 0.10, dist: 36, target: [0.4, 0.4, 0], fov: 32, roll: 0.006, shift: 0.100 },
+      { t: 0.74, yaw: 0.64, pitch: 0.03, dist: 26, target: [0.5, 0.3, 0], fov: 34, roll: 0.000, shift: 0.085 },
+      { t: 1.00, yaw: 0.71, pitch: 0.11, dist: 31, target: [0.5, 0.5, 0], fov: 34, roll: 0.004, shift: 0.090 },
     ],
     jupiter: { pos: [0, 0, 0], fade: 0, scale: 1 },
     ship: { yaw: 0.0, roll: 0.0, pitch: 0.0 },
@@ -140,6 +140,7 @@ export class Show {
     this._jupiterBase = new THREE.Vector3();
     this._engineWorld = new THREE.Vector3();
     this._shadowDir = new THREE.Vector3();
+    this._shadowBase = new THREE.Vector3();
     this._shadowT1 = new THREE.Vector3();
     this._shadowT2 = new THREE.Vector3();
     this._up = new THREE.Vector3(0, 1, 0);
@@ -202,6 +203,25 @@ export class Show {
       this.zoom = lerp(this.zoom, 1, 1 - Math.exp(-dt * 0.18));
     }
 
+    // ---------------- engine throttle ----------------
+    let throttle;
+    if (a.id === 0) throttle = 0.10 + 0.012 * Math.sin(t * 0.42);
+    else if (a.id === 1) throttle = 0.045 + 0.008 * Math.sin(t * 0.55);
+    else if (a.id === 2) {
+      if (p > 0.075 && !this.ignited) {
+        this.ignited = true;
+        this.flash = 0.55;
+        this.shake = 0.9;
+        this.stage.engine.burst();
+      }
+      throttle = 0.045 + 0.955 * smoothstep(0.075, 0.21, p);
+      throttle += 0.025 * Math.sin(t * 34.0) * smoothstep(0.20, 0.4, p);
+      throttle = clamp(throttle, 0, 1);
+    } else {
+      throttle = 0.98 - 0.46 * smoothstep(0, 1, p);
+    }
+    this.stage.engine.setThrottle(throttle, t);
+
     // ---------------- camera ----------------
     const cam = a.cam;
     let yaw = hermite(cam, 'yaw', p) + this.lookYaw;
@@ -216,11 +236,25 @@ export class Show {
 
     if (!this.stage.reduceMotion) {
       const tt = t + 0.0;
-      yaw += 0.0032 * Math.sin(tt * 0.37) + 0.0018 * Math.sin(tt * 0.91 + 1.7);
-      pitch += 0.0022 * Math.sin(tt * 0.29 + 1.3) + 0.0013 * Math.sin(tt * 0.73);
-      roll += 0.0035 * Math.sin(tt * 0.21 + 0.8);
-      this._target.y += 0.018 * Math.sin(tt * 0.43);
-      this._target.x += 0.022 * Math.sin(tt * 0.31 + 0.5);
+      yaw += 0.0060 * Math.sin(tt * 0.23) + 0.0024 * Math.sin(tt * 0.71 + 1.7);
+      pitch += 0.0036 * Math.sin(tt * 0.19 + 1.3) + 0.0015 * Math.sin(tt * 0.63);
+      roll += 0.0055 * Math.sin(tt * 0.17 + 0.8);
+      this._target.y += 0.035 * Math.sin(tt * 0.31);
+      this._target.x += 0.045 * Math.sin(tt * 0.24 + 0.5);
+    }
+
+    // the drive's low hum
+    if (a.id === 2 && !this.stage.reduceMotion) {
+      const hum = throttle * throttle * 0.0022;
+      yaw += Math.sin(t * 23.0) * hum;
+      pitch += Math.sin(t * 19.3 + 1.1) * hum;
+      roll += Math.sin(t * 13.7) * hum * 1.6;
+    }
+
+    // a lens punch on ignition
+    if (this.flash > 0.002) {
+      fov += this.flash * 5.0;
+      dist *= 1 - this.flash * 0.05;
     }
 
     if (this.shake > 0.002) {
@@ -261,24 +295,6 @@ export class Show {
     ship.group.rotation.set(a.ship.pitch || 0, shipYaw, shipRoll);
     ship.group.updateMatrixWorld(true);
 
-    // ---------------- engine throttle ----------------
-    let throttle;
-    if (a.id === 0) throttle = 0.10 + 0.012 * Math.sin(t * 0.42);
-    else if (a.id === 1) throttle = 0.045 + 0.008 * Math.sin(t * 0.55);
-    else if (a.id === 2) {
-      if (p > 0.075 && !this.ignited) {
-        this.ignited = true;
-        this.flash = 0.38;
-        this.shake = 0.9;
-      }
-      throttle = 0.045 + 0.955 * smoothstep(0.075, 0.21, p);
-      throttle += 0.025 * Math.sin(t * 34.0) * smoothstep(0.20, 0.4, p);
-      throttle = clamp(throttle, 0, 1);
-    } else {
-      throttle = 0.98 - 0.46 * smoothstep(0, 1, p);
-    }
-    this.stage.engine.setThrottle(throttle, t);
-
     // ---------------- jupiter ----------------
     const jup = this.stage.jupiter;
     jup.group.position.set(
@@ -288,27 +304,34 @@ export class Show {
     );
     jup.update(dt);
     jup.uniforms.uSunDir.value.copy(this._jupSun);
-    const engOnJup = a.id === 3 ? throttle * 0.35 : throttle * 1.25;
+    const engOnJup = a.id === 3 ? throttle * 0.50 : throttle * 0.90;
     jup.uniforms.uEngine.value = a.jupiter.fade > 0.01 ? engOnJup : 0;
     jup.uniforms.uGlow.value = a.id === 0 ? 1.0 : 1.0;
     jup.uniforms.uFlash.value = this.lightning;
+    jup.uniforms.uSunInt.value = a.id === 0 ? 0 : (a.id === 1 ? 0.22 : (a.id === 2 ? 0.12 : 0.09));
 
     // shadow centre: the sub-engine point on Jupiter, swept sideways
     this.stage.engine.group.getWorldPosition(this._engineWorld);
     const jp = jup.group.position;
-    jup.uniforms.uEngineDir.value.copy(this._engineWorld).sub(jp).normalize();
-    this._shadowDir.copy(jup.uniforms.uEngineDir.value);
-    this._shadowT1.crossVectors(this._shadowDir, this._up).normalize();
-    this._shadowT2.crossVectors(this._shadowDir, this._shadowT1);
+    // shadow stays anchored to the ship, while the drive's light is nudged
+    // sideways so the lit face reads as a crescent rather than a full disc
+    this._shadowBase.copy(this._engineWorld).sub(jp).normalize();
+    this._shadowT1.crossVectors(this._shadowBase, this._up).normalize();
+    this._shadowT2.crossVectors(this._shadowBase, this._shadowT1);
     const sweep = a.id === 2 ? smoothstep(0.16, 0.92, p) : 0;
-    this._shadowDir
-      .addScaledVector(this._shadowT1, Math.sin(sweep * 1.9 - 0.45) * 0.20)
+    this._shadowDir.copy(this._shadowBase)
+      .addScaledVector(this._shadowT1, -0.34 + Math.sin(sweep * 1.9 - 0.45) * 0.20)
       .addScaledVector(this._shadowT2, Math.sin(sweep * 1.5 + 0.6) * 0.05)
       .normalize();
+    jup.uniforms.uEngineDir.value.copy(this._shadowDir);
+    this._shadowDir.copy(this._shadowBase)
+      .addScaledVector(this._shadowT1, Math.sin(sweep * 1.9 - 0.45) * 0.14)
+      .addScaledVector(this._shadowT2, Math.sin(sweep * 1.5 + 0.6) * 0.04)
+      .normalize();
     jup.uniforms.uShadowDir.value.copy(this._shadowDir);
-    jup.uniforms.uShadow.value = a.id === 2 ? 0.94 * smoothstep(0.10, 0.28, p) : 0;
-    const rr = a.id === 2 ? 0.185 + 0.035 * p : 0.185;
-    jup.uniforms.uShadowRadius.value.set(rr, rr * 0.40);
+    jup.uniforms.uShadow.value = a.id === 2 ? 0.90 * smoothstep(0.10, 0.28, p) : 0;
+    const rr = a.id === 2 ? 0.255 + 0.045 * p : 0.220;
+    jup.uniforms.uShadowRadius.value.set(rr, rr * 0.32);
 
     // lightning on the night side
     if (a.id === 2 && p > 0.12) {
@@ -372,6 +395,7 @@ export class Show {
 
     return {
       time: t,
+      dt,
       bloom: 0.16 + throttle * 0.48 + this.lightning * 0.10,
       exposure: 1.0 + this.flash * 0.35,
       flash: this.flash,
